@@ -1,0 +1,7 @@
+extends: existence
+message: "Use a comma, colon, bracket or full stop instead of '%s'."
+level: error
+nonword: true
+tokens:
+  - '\u2014'
+  - '\u2013'

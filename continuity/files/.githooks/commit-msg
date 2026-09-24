@@ -1,0 +1,23 @@
+#!/bin/sh
+# Versioned commit-msg: Conventional Commits, no dashes, ADR and gate trailers.
+CLAUDE_PROJECT_DIR="$(git rev-parse --show-toplevel)"; . "$CLAUDE_PROJECT_DIR/scripts/lib.sh"
+cd "$ROOT"
+msg="$(grep -v '^#' "$1")"
+subject="$(printf '%s\n' "$msg" | head -n 1)"
+
+printf '%s' "$subject" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|build|ci|perf)(\([a-z0-9-]+\))?!?: .{1,72}$' \
+  || block 1 "commit-msg: subject must match Conventional Commits, max 72 chars after the colon:" "  $subject"
+
+printf '%s' "$msg" | grep -q "$(printf '\342\200\224\|\342\200\223')" \
+  && block 1 "commit-msg: em or en dash found. Use a comma, colon, bracket or full stop."
+
+for n in $(git diff --cached --name-only --diff-filter=A | sed -nE 's#^docs/decisions/([0-9]{4})-.*\.md$#\1#p'); do
+  printf '%s\n' "$msg" | grep -qE "^ADR: $n\$" || block 1 "commit-msg: new ADR $n needs the trailer 'ADR: $n'"
+done
+
+for id in $(printf '%s\n' "$msg" | sed -nE 's/^Closes-Item: *([A-Za-z0-9_-]+) *$/\1/p'); do
+  git cat-file -e "HEAD:.gates/$id.json" 2>/dev/null && continue
+  git diff --cached --name-only | grep -qx ".gates/$id.json" && continue
+  block 1 "commit-msg: Closes-Item: $id needs committed evidence .gates/$id.json (scripts/gate.sh $id or a human Accept)"
+done
+exit 0
