@@ -56,7 +56,7 @@ scripts/gate.sh <ID> runs done_when test; on pass writes .gates/<ID>.json {id, b
 - PreToolUse Write|Edit|MultiEdit -> guard-write.sh: blocks change to tracked docs/decisions/NNNN-*.md; any path under .gates/; Write of docs/**/*.md without OKF type.
 - PreToolUse Bash -> guard-bash.sh: blocks git commit on main/master; --no-verify; force push; commit --amend of pushed commit; shell writes to .gates/ or docs/decisions/ other than via scripts/.
 - PostToolUse Write|Edit|MultiEdit -> lint-md.sh: in-scope .md: Vale on that file + OKF key check.
-- PostToolUse AskUserQuestion -> gate-capture.sh: header "Gate <ID>" and chosen label starts with Accept -> .gates/<ID>.json. Log one raw payload to .claude/.cache/ first to confirm field names.
+- PostToolUse AskUserQuestion -> gate-capture.sh: header "Gate <ID>" and chosen label starts with Accept -> .gates/<ID>.json. Payload (confirmed live): tool_input.{questions,answers,annotations}, answers keyed by full question text, value = chosen label; tool_response mirrors the same keys. Every payload is also logged raw to .claude/.cache/gate-capture-last.json.
 - UserPromptSubmit -> gate-capture.sh: prompt ^ACCEPT <ID> writes same evidence.
 - Stop -> stop-check.sh: exit 0 if stop_hook_active; else open next_actions -> exit 2 listing them; max 2 blocks per session counted in .claude/.cache/ (gitignored).
 
@@ -66,17 +66,27 @@ scripts/gate.sh <ID> runs done_when test; on pass writes .gates/<ID>.json {id, b
 - Scope: docs/** and root *.md; exclude .claude/, do-work/, .github/, tool mirror dirs. Warn-only mode: all hooks exit 0 and print to stderr.
 
 ## Relation to other Skaff conventions
-- knowledge-protocol.md: replace "edit old Status line to Superseded" with supersedes + generated index; section order Context/Decision/Alternatives/Consequences; point to OKF schema.
-- do-work/templates/ADR-template.md: match ADR format above.
-- .claude/agents/git-workflow.md: replace "Do not commit the hook itself" with versioned .githooks/ via core.hooksPath; merge its secret scan into .githooks/pre-commit.
+- knowledge-protocol.md: ADRs use supersedes + the generated index, never a Status line edit; sections Context/Decision/Alternatives/Consequences; schema is this file.
+- do-work/templates/ADR-template.md: the ADR format above.
+- .claude/agents/git-workflow.md: hooks are versioned in .githooks/ via core.hooksPath; its secret scan runs in .githooks/pre-commit. Frozen pack versions still carry the old text.
 - CLAUDE.md and AGENTS.md: identical "Continuity" section <= 8 lines: read SessionStart output then docs/STATE.md; ADRs immutable; gates decide done.
 - Only doc-writer writes ADRs after bootstrap; ADRs 0001-0003 are bootstrap exceptions.
+- Knobs: CONTINUITY_ENFORCEMENT (fail-closed | warn-only), CONTINUITY_HUMAN (default set in scripts/lib.sh by the installer), CONTINUITY_EXCLUDE_ROOT_MD.
 
 ## Vale
 .vale.ini: StylesPath=.vale/styles, MinAlertLevel=error, Vocab=Base, Packages pinned by release URL (Google, write-good), [*.md] BasedOnStyles = Vale, write-good, Google, Local; write-good.Passive/Weasel/TooWordy = error; Google.Units = NO; Vale.Terms = NO. Local/Dashes.yml (existence, error, \u2014 \u2013), Local/Banned.yml (existence, error, load-bearing). Vale version pinned in .tool-versions. Commit Local/ + vocab, gitignore synced packages. "Dash and banned-words only" mode: BasedOnStyles = Local, no packages.
 
 ## Selftest
-scripts/selftest.sh in throwaway worktree on temp branch; feeds hook scripts sample JSON; prints case|expected|actual; non-zero on mismatch. Cases: edit ADR 0001; docs without type; em dash; passive sentence; bad commit subject; commit on main; --no-verify; Closes-Item without evidence; stale doc at SessionStart; Stop with open item; clean commit passes.
+scripts/selftest.sh in throwaway worktree on temp branch; feeds hook scripts sample JSON; prints case|expected|actual; non-zero on mismatch. Cases: edit ADR 0001; docs without type; em dash; passive sentence; bad commit subject; commit on main; --no-verify; Closes-Item without evidence; stale doc at SessionStart; Stop with open item; clean commit passes. A repo with no ADR gets a staged fixture ADR for case 1. The self-test is the gate for any hook change (item A1).
 
 ## Install commit sequence
-1 chore(scaffold): install skaff <pack>@<version>; 2 docs(adr): record scaffold decisions; 3 feat(continuity): add OKF state doc, ADR index and gate scripts; 4 build(hooks): enforce ADR, doc and commit hygiene in git hooks; 5 build(claude): add Claude Code hooks for lint, gates and cold start; 6 docs(conventions): reconcile skaff knowledge protocol with immutable ADRs; 7 test(hooks): add hook self-test (Closes-Item: A1); 8 chore(state): record gate A2 (Closes-Item: A2).
+Skaff install.sh / install.ps1 ship this layer (see INSTALL.md). 1 chore: bootstrap claude agent scaffold (on main, before hooks exist); then scripts/bootstrap.sh and a branch; 2 docs(adr): record scaffold decisions (0001-0003, optional); 3 chore(state): record gate A1 (Closes-Item: A1, after scripts/gate.sh A1); 4 chore(state): record gate A2 (Closes-Item: A2, human validates cold start).
+
+## Pitfalls
+1. Git hooks set CLAUDE_PROJECT_DIR from `git rev-parse --show-toplevel` before sourcing lib.sh; otherwise a commit from a worktree lints the wrong tree.
+2. Vale lints YAML front matter values too (a passive `state:` fails). Quote YAML flow map values that contain `?` or `: `.
+3. Windows: core.autocrlf breaks sh scripts, hence `* text=auto eol=lf` and bootstrap setting autocrlf false. jq emits CRLF: pipe `@tsv` output through `tr -d '\r'` (a captured answer read as `Accept A2\r` and never matched); gate evidence JSON also has CRLF on disk and eol=lf normalises it on commit.
+4. Windows: winget shims are not on PATH for shells that were already running; put jq and gitleaks in ~/bin. The Claude Code Bash tool heredoc collapses `\\`, so write files that contain backslashes with the Write tool.
+5. Claude Code picks up project .claude/settings.json hooks mid-session (confirmed on 2.1.281: guard-write blocked a live Write). guard-bash also matches literal text, so a command that merely mentions a blocked flag or a write into .gates/ is refused.
+6. `sed -n "/x/,$p"` in double quotes expands `$p`; the self-test caught it. Keep the self-test as the gate.
+7. state_items reads only the next_actions block, never open_questions, or questions show up as open gates.
