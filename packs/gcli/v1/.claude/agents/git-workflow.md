@@ -106,9 +106,9 @@ Regardless of scanner: reject any staged `.env`, `.env.*` (except `.env.example`
 
 ### Pre-commit Hook
 
-On first run in a repo, offer to install a local pre-commit hook. If gitleaks is available, the hook calls `gitleaks protect --staged --no-banner --redact`. If not, the hook runs the fallback regex scan and logs that gitleaks should be installed. Write to `.git/hooks/pre-commit` with `chmod +x`. Do not commit the hook itself.
+Git hooks are versioned in `.githooks/` and activated with `git config core.hooksPath .githooks` (run by `scripts/bootstrap.sh`). The secret scan lives in `.githooks/pre-commit`: it calls `gitleaks protect --staged --no-banner --redact` when gitleaks is available, else runs the fallback regex scan above and logs that gitleaks should be installed. Commit changes to `.githooks/` like any other code. If `core.hooksPath` is unset on first run, offer to run `scripts/bootstrap.sh`; never write to `.git/hooks/` directly.
 
-If the repo already uses Husky, lefthook, or pre-commit (Python), add the scan as a new hook entry in the existing config and surface the change for review instead of writing `.git/hooks/pre-commit` directly.
+If the repo already uses Husky, lefthook, or pre-commit (Python), add the scan as a new hook entry in the existing config and surface the change for review instead of setting `core.hooksPath`, so the existing manager keeps ownership of the hooks.
 
 ## Directives
 

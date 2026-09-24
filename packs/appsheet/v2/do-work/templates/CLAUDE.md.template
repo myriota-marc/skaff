@@ -23,6 +23,13 @@ Read `.claude/conventions/appsheet-style.md` before editing any of the three sur
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+## Continuity
+
+- Cold start: read the SessionStart hook output, then the `docs/STATE.md` front matter. Do not rebuild state from chat or code.
+- ADRs in `docs/decisions/` are immutable once committed. Change one with a new ADR listing it in `supersedes`, then run `scripts/adr-index.sh`.
+- Gates decide done: an item closes only with `.gates/<ID>.json` evidence (a passing `done_when` test or a captured human Accept) and a `Closes-Item: <ID>` commit trailer.
+- Full rules: `.claude/conventions/continuity-protocol.md`.
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
