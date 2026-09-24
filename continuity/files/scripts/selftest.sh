@@ -59,6 +59,20 @@ git checkout -q -- . && rm -f docs/dash.md docs/passive.md docs/old.md
 fm "Clean note" "This note shows that a clean commit passes every hook." > docs/clean.md
 git add docs/clean.md
 row "11 clean commit passes" 0 "$(code git -c core.hooksPath=.githooks commit -q -m 'docs: add clean self-test note')"
+row "12 STATE edit mentioning .gates passes" 0 "$(code sh $H/guard-bash.sh <<'EOF'
+{"tool_input":{"command":"sed -i 's#^verified: .*#verified: [.gates/A1.json]#' docs/STATE.md"}}
+EOF
+)"
+row "13 shell write into .gates" 2 "$(code sh $H/guard-bash.sh <<'EOF'
+{"tool_input":{"command":"echo x > .gates/A1.json"}}
+EOF
+)"
+git symbolic-ref HEAD refs/heads/main
+row "14 switch and commit in one call on main" 2 "$(code sh $H/guard-bash.sh <<'EOF'
+{"tool_input":{"command":"git switch -c topic && git commit -m 'chore: x'"}}
+EOF
+)"
+git symbolic-ref HEAD "refs/heads/$br"
 [ "$fail" -eq 0 ] || { echo "last output:"; head -n 20 "$tmp/out"; }
 
 printf 'case | expected | actual\n--- | --- | ---\n%s' "$rows"
