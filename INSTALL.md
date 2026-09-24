@@ -51,7 +51,7 @@ Default pack is `csharp`. Default version is the latest numeric `v<N>` directory
 
 ## What gets installed
 
-The installer copies two source trees in order:
+The installer copies two source trees in order, then adds the continuity layer:
 
 1. **`common/`** - Language-agnostic files installed in every project:
    - Behavioral convention (`commit-style.md`)
@@ -68,6 +68,13 @@ The installer copies two source trees in order:
    - `CLAUDE.md.template` (installed as `CLAUDE.md`)
    - `ratchet.conf.template`, `.gitleaks.toml.template`
    - Optional CI workflows (`ci/`)
+
+3. **`continuity/`** - Zero-reconstruction continuity layer (skip with `-NoContinuity` / `--no-continuity`). Rules in `.claude/conventions/continuity-protocol.md`.
+   - `files/` copied like the trees above: `.githooks/{pre-commit,commit-msg}`, `scripts/{lib,gate,adr-index,bootstrap,selftest}.sh`, `.claude/hooks/*.sh`, `.vale.ini`, `.vale/styles/Local/`, the Vale vocabulary, `docs/decisions/index.md`, `.gates/`. With `-Force` scaffold-owned files are overwritten, but existing `docs/` and `.gates/` files never are.
+   - `merge/` merged, never overwritten: missing lines are appended to `.gitignore`, `.gitattributes` and `.tool-versions` (tools matched by name, so an existing pin wins), and hook groups whose command is not already present are added to `.claude/settings.json` (install.sh needs `jq` for this, else it reports the file as skipped).
+   - `templates/STATE.md.template` rendered to `docs/STATE.md` only when absent, with the repo name, today, `stale_after` 14 days out, `-Purpose` / `--purpose`, and gate item A1 (self-test) open.
+   - The human gate id in `scripts/lib.sh` comes from `-Human` / `--human`, else `human:<local part of git config user.email>`.
+   - The installer never sets `core.hooksPath`; `scripts/bootstrap.sh` does, after the first commit.
 
 On a fresh target, `common/` is copied first and the pack overlay second, and both copies share one `-Force` flag - so without `-Force`, a file that exists in both wins by first-writer, meaning `common/` wins, not the pack. With `-Force`, both copies overwrite unconditionally, so the pack (copied second) wins. The one file that currently ships in both trees is `.claude/conventions/commit-style.md`, byte-identical across every pack, so this ordering has no visible effect today - but it will if a pack's copy of a shared file ever diverges. The `CLAUDE.md.template` is special-cased: it installs to `<target>/CLAUDE.md` and is not preserved under `do-work/templates/` in the target.
 
@@ -122,6 +129,16 @@ Review the diff in the target's git history, keep what you want, discard what yo
    git add .
    git commit -m "chore: bootstrap claude agent scaffold"
    ```
+
+14. Activate the continuity layer (needs `vale`, `jq`, `gitleaks` at the versions in `.tool-versions`):
+
+   ```bash
+   sh scripts/bootstrap.sh          # core.hooksPath=.githooks, tool pins, vale sync
+   git switch -c chore/continuity   # hooks reject commits on main
+   sh scripts/gate.sh A1            # runs scripts/selftest.sh, writes .gates/A1.json
+   ```
+
+   Then set A1 to `status: done` in `docs/STATE.md`, add `.gates/A1.json` to `verified`, and commit with the trailer `Closes-Item: A1`.
 
 ## Running the queue
 
