@@ -98,7 +98,7 @@ You may READ any file. You do not modify source, tests, or config.
    Subsequent runs baseline against the initial value.
 9. Apply the graduated kept bar from the baseline composite band **and scope_hint**. The higher
    the score, the harder the bar. The broader the scope, the harder the bar. Do not widen the
-   bar to push a stuck REQ through.
+   bar to push a stuck REQ through. Apply the Saturated Dimensions (Held at Max) rule from ratchet-protocol.md; it is part of the bar, not a widening.
 10. When baseline composite >= the `external_validation_after_composite` threshold (default
     0.85), dispatch `reviewer` as a second, independent pass with the prompt snippet from
     `.claude/conventions/external-validation.md`. The dispatch brief must include only the diff,

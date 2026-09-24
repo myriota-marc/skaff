@@ -82,6 +82,25 @@ A "regression" means any dimension dropping below its previous baseline value, n
 
 The focused column is more permissive because focused changes have less opportunity to improve many dimensions simultaneously. A bugfix that touches one hook legitimately cannot improve structure and complexity and test_coverage all at once. Requiring it to do so forces either scope creep or ratchet override.
 
+### Saturated Dimensions (Held at Max)
+
+A mature codebase can have most dimensions already at 1.0. Those dimensions cannot improve, so without this rule the "N dims improve" and "+0.005 composite" requirements become unreachable and every clean change needs an override. The rule below is part of the bar, not a widening of it.
+
+- **Held at max.** A scored dimension that is 1.0 on the baseline and 1.0 on this run. N/A dimensions and dimensions appearing this run (see Dimension Appearance) are never held at max. A held-at-max dimension that drops below 1.0 is a regression.
+- **Improving-dimension count.** Wherever a row requires N dimensions to improve (including "at least one"), count improved dimensions plus held-at-max dimensions.
+- **Composite delta cap.** "Composite increases by >= 0.005" becomes "increases by >= min(0.005, 1.0 minus baseline composite)".
+- **Held-at-max pass.** When held-at-max dimensions alone meet the row's dimension count, there are zero regressions, and the composite does not decrease, the change is Kept: the composite delta requirement is waived and, in the 0.93 and above band, no override is required. External validation still runs wherever the row requires it, and a failure still Rejects.
+- **Strict otherwise.** Scope, regression, dimension disappearance and external validation rules are unchanged. A change that relies on improved dimensions to meet the count still needs the (capped) composite delta, and still needs the override in the 0.93 and above band.
+- **Record it.** The `## Ratchet` section lists `Held at max: <dims>` and names the clause applied (count, cap, or held-at-max pass).
+
+Worked example (seven scored dimensions, broad scope, 0.93 and above band):
+
+| Case | Baseline | This run | Old bar | New bar |
+| ---- | -------- | -------- | ------- | ------- |
+| A | 0.9775; five dims at 1.0, two at 0.935 and 0.94 | Same values; composite 0.9775; reviewer Approve; external validation passes | Rejected: +0.005 and three improving dims are unreachable, override needed | Kept: five held at max >= three, zero regressions, composite held, so held-at-max pass; no override |
+| B | As A | One of the two lower dims drops 0.94 to 0.93 | Rejected | Rejected: a regression, the held-at-max pass needs zero |
+| C | 0.9975; two dims at 1.0 | Two held at max plus one improved; composite 0.9990 | Rejected unless +0.005, which exceeds the 0.0025 headroom | Count met (2 + 1 = 3); delta needed is min(0.005, 0.0025) = 0.0025, and +0.0015 falls short, so Rejected; with composite 1.0000 it passes the bar but still needs the override, since held-at-max alone (2) is below 3 |
+
 ## External Validation
 
 At composite >= 0.85, the ratchet must dispatch an independent reviewer pass before accepting the change. This is a second `reviewer` invocation with a different seed and a prompt that explicitly does **not** include the implementing agent's scores or self-assessment - only the diff, the REQ, and the dimension definitions.
@@ -142,6 +161,7 @@ Every ratcheted REQ gets a `## Ratchet` section appended before archive. Written
 **New composite**: 0.8815
 **Delta**: +0.0073
 **Scope**: broad (8 files, 247 lines changed)
+**Held at max**: <dims at 1.0 on baseline and this run, or none>
 **Kept criterion**: 0.85-0.92 / broad - requires +0.005 composite, 3 dims improving, 0 regressions, external validation
 **Kept**: Yes
 
