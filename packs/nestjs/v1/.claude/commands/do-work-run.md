@@ -243,6 +243,8 @@ updated count in the dispatch brief.
 - Never touch `## Plan`, `## Plan Hash`, `## Ratchet`, or `## Verification` /
   `## Plan Verification` sections. Those are specialist-owned or skill-owned.
 - Never release the lock mid-REQ without writing a progress summary.
+- Specialists hit turn limits (30 to 50 turns) on long REQs. When one returns unfinished, resume the same agent with SendMessage (its ID from the spawn result); a fresh spawn loses its context.
+- The verify-request, verify-plan and cleanup actions come from the `bladnman/do-work` skill, which Skaff does not install. If it is missing, install it (`npx skills add bladnman/do-work`) or use the stand-in procedure in INSTALL.md "do-work skill"; never skip the gates.
 - No em dashes anywhere. Use " - " instead.
 
 ## Definition of Done
