@@ -72,6 +72,7 @@ The truly pack-agnostic files live in `common/` (not under `packs/`) and are ins
 
 - `common/.claude/conventions/commit-style.md` - Conventional Commits rules, language-agnostic.
 - `common/.claude/conventions/knowledge-protocol.md` - the two-lane ADR / proposed-convention knowledge trail (promoted from the nextjs pack, the only place it used to ship). Uses `<pack>` and "domain advisor or specialist agent" placeholders since it cannot name any one pack's agents; see the file's own "Placeholders in this file" section.
+- `common/.claude/conventions/continuity-protocol.md` - zero-reconstruction continuity layer: OKF 0.2 living docs (`docs/STATE.md`), immutable ADRs with a generated index, `.gates/` evidence, Claude Code and git hooks, Vale, self-test. Referenced from the Continuity section of every CLAUDE.md template and `AGENTS.md`.
 - `common/do-work/templates/REQ-template.md` and `UR-template.md` - generic request shapes. `REQ-template.md` uses the same `<pack>-implement` placeholder convention as `knowledge-protocol.md`, and explains it inline; it previously hard-coded `csharp-implement` and so shipped a wrong agent name into every non-csharp target.
 - `common/do-work/templates/ADR-template.md` and `proposed-convention-template.md` - starter files for the two knowledge-protocol lanes (also promoted from the nextjs pack).
 - `common/do-work/` runtime dir skeletons (`.gitkeep` sentinels), including `do-work/proposed-conventions/.gitkeep`.
