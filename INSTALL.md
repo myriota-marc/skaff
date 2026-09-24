@@ -144,6 +144,22 @@ Review the diff in the target's git history, keep what you want, discard what yo
 
 Only one orchestrator may drain the queue at a time. `do work run` acquires `do-work/.lock`. Concurrent invocations refuse to start. See `.claude/conventions/do-work-protocol.md` in the installed pack for lock semantics.
 
+## do-work skill
+
+`/do-work-run` relies on the [`bladnman/do-work`](https://github.com/bladnman/do-work) skill for its verify-request, verify-plan and cleanup actions. Skaff does not install it. Install it once per machine or project:
+
+```bash
+npx skills add bladnman/do-work
+```
+
+Stand-in when the skill is unavailable: the orchestrator spawns a general-purpose agent per action, briefed with the REQ path and `.claude/conventions/do-work-protocol.md` plus `coverage-protocol.md`:
+
+- verify-request: score the REQ against its UR inputs and append `## Verification`.
+- verify-plan: score the `## Plan` against the REQ and append `## Plan Verification`; the loop continues only at 100% coverage.
+- cleanup: after the queue drains, move completed REQs and their URs into `do-work/archive/` as the protocol describes.
+
+Long specialist runs can hit 30 to 50 turn limits; the orchestrator resumes the same agent with SendMessage rather than spawning a new one.
+
 ## Dispatch budget
 
 Sub-agents receive at most 2000 tokens of verbatim content per dispatch brief. Over that, the orchestrator passes file paths and the sub-agent re-reads from disk inside its isolated context window. See the installed pack's `do-work-protocol.md`.
