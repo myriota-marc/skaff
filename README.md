@@ -118,6 +118,8 @@ The installer is idempotent. Existing files are preserved unless `-Force` or `--
    git commit -m "chore: bootstrap claude agent scaffold"
    ```
 
+12. Activate the continuity layer: `sh scripts/bootstrap.sh`, switch to a branch, then `sh scripts/gate.sh A1`. See [INSTALL.md](./INSTALL.md) "After install".
+
 ### Prerequisites
 
 - **Claude Code** CLI - full agent workflow with sub-agent spawning.
@@ -130,6 +132,7 @@ The installer is idempotent. Existing files are preserved unless `-Force` or `--
 - **Continue** - reads `.continue/rules/`.
 - **Pack-specific toolchains** still apply - for example .NET SDK 9.x and `dotnet format` for `csharp`.
 - **git** with `gh` CLI remains recommended for the git-workflow agent. **gitleaks** is still strongly recommended for secret scanning.
+- **Continuity layer** - `sh`, `jq`, `vale` and `gitleaks` at the versions pinned in the installed `.tool-versions` (`scripts/bootstrap.sh` checks them). Skip the layer with `--no-continuity`.
 
 ## Quick start
 
@@ -185,8 +188,9 @@ Skaff/
 │   ├── .github/, .continue/            shared multi-LLM instructions
 │   ├── .cursorrules, .windsurfrules
 │   ├── .aider.conf.yml
-│   ├── .claude/conventions/commit-style.md, knowledge-protocol.md
+│   ├── .claude/conventions/commit-style.md, knowledge-protocol.md, continuity-protocol.md
 │   └── do-work/                        generic templates + runtime dir skeletons + proposed-conventions/
+├── continuity/                         continuity layer: files/ (hooks, scripts, Vale), merge/, templates/STATE.md.template
 └── packs/
     ├── README.md, SHARED-NOTES.md      pack contract, backport checklist
     ├── csharp/PACK.md + v1/, v2/       .NET 9+ pack, version manifest + overlay
@@ -446,11 +450,13 @@ scope_hint is computed from `git diff --stat`, not agent-claimed. A "focused" fi
 
 4. **Immutability rules** - files in `working/` and `archive/` are immutable except for named append-only sections. Addendum REQs are the only way to modify an in-flight or completed request.
 
-5. **Secret scanning** - gitleaks (150+ patterns, industry baseline) preferred, inline regex fallback when gitleaks is not installed. File-type blocklist rejects `.env`, `.pfx`, `*.pem`, etc. Pre-commit hook option on first run.
+5. **Secret scanning** - gitleaks (150+ patterns, industry baseline) preferred, inline regex fallback when gitleaks is not installed. File-type blocklist rejects `.env`, `.pfx`, `*.pem`, etc. Runs in the versioned `.githooks/pre-commit` shipped by the continuity layer.
 
 6. **CI-side gate** - `ratchet-gate.yml.template` workflow enforces build, test, format, CS1591, gitleaks, and baseline-composite-floor regressions on every PR. Auto-merge is deliberately not enabled.
 
-7. **Dispatch budget** - 2000-token cap on verbatim content in sub-agent dispatch briefs. Over that, file paths only; sub-agents re-read from disk inside their isolated contexts. Prevents context bloat at scale.
+7. **Continuity layer** - versioned git hooks and Claude Code hooks keep ADRs immutable, lint docs with Vale and OKF keys, enforce Conventional Commits without em or en dashes, block commits on main and hook bypass flags, and close work items only with `.gates/` evidence. `scripts/selftest.sh` proves the hooks. See `.claude/conventions/continuity-protocol.md`.
+
+8. **Dispatch budget** - 2000-token cap on verbatim content in sub-agent dispatch briefs. Over that, file paths only; sub-agents re-read from disk inside their isolated contexts. Prevents context bloat at scale.
 
 ## Extending
 

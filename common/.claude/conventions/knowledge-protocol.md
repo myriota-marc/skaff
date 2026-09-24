@@ -37,18 +37,21 @@ A REQ does NOT produce an ADR when it is a routine bug fix, a refactor inside an
 
 ### Filename and structure
 
-Files live at `docs/decisions/NNNN-<kebab-title>.md` where `NNNN` is the next zero-padded sequence number. Use `find docs/decisions -name '*.md' | wc -l` to pick the next number.
+Files live at `docs/decisions/NNNN-<kebab-title>.md` where `NNNN` is the next zero-padded sequence number. Pick the next number from the highest existing `docs/decisions/[0-9][0-9][0-9][0-9]-*.md` plus one (`index.md` is generated and not an ADR).
 
-Required structure:
+Required structure (OKF 0.2 front matter, body under 20 lines; schema and field meanings in `.claude/conventions/continuity-protocol.md`):
 
 ```markdown
-# ADR NNNN: <title>
-
-- Status: Accepted | Superseded by ADR-MMMM
-- Date: YYYY-MM-DD
-- Originating REQ: REQ-NNN
-- Authors: <agent role(s) that drafted; final approver is the human>
-
+---
+type: Decision Record
+title: "NNNN: <decision, imperative>"
+description: <one sentence>
+status: stable
+date: YYYY-MM-DD
+supersedes: []
+generated: {by: <agent or human id>, at: <ISO8601>}
+tags: []
+---
 ## Context
 
 <2-5 sentences: the situation forcing the decision. Constraints, prior state, what triggered the call.>
@@ -57,22 +60,22 @@ Required structure:
 
 <1-3 sentences: what was decided. Imperative voice. No hedging.>
 
+## Alternatives
+
+- **<option>**: <why rejected in one line>
+
 ## Consequences
 
-- **Positive:** <one or more>
-- **Negative:** <one or more>
-- **Tradeoffs accepted:** <one or more>
-
-## Alternatives considered
-
-- **<option>** - <why rejected in one line>
-- **<option>** - <why rejected in one line>
+- <positive, negative, and tradeoffs accepted>
 ```
+
+There is no Status line. Effective status (accepted or superseded) is computed, never written: `scripts/adr-index.sh` regenerates `docs/decisions/index.md` with one line per ADR and marks an ADR superseded when a later ADR lists it in `supersedes`.
 
 ### Authoring rules
 
 - **Only `<pack>-doc-writer` writes ADRs.** Other agents can recommend an ADR in their summary; doc-writer drafts during the doc phase of `/do-work-run`.
-- **Append-only.** Never edit an accepted ADR. To change a decision, write a new ADR with `Status: Accepted` and edit the old one's Status line to `Superseded by ADR-MMMM` (the only edit ever permitted on an existing ADR).
+- **Immutable once committed.** Never edit, rename, or delete a committed ADR, not even to mark it superseded. To change a decision, write a new ADR whose `supersedes` lists the old number(s), then run `scripts/adr-index.sh` to regenerate `docs/decisions/index.md`. The pre-commit hook rejects modified ADRs and a stale index.
+- **Bootstrap exception.** ADRs 0001-0003 recording the scaffold install may be written by the installing agent; after bootstrap only `<pack>-doc-writer` writes ADRs.
 - **Self-contained.** A reader two years later must be able to understand the decision without the originating REQ open. Restate context in the ADR body.
 - **No ADR for guideline changes.** If the decision is "we will always use X for Y from now on", that is a convention edit, not an ADR.
 

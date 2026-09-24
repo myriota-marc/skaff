@@ -4,6 +4,13 @@
 
 This repository was scaffolded with skaff. Shared agent instructions live here so any supported coding tool can work consistently.
 
+## Continuity
+
+- Cold start: read the SessionStart hook output, then the `docs/STATE.md` front matter. Do not rebuild state from chat or code.
+- ADRs in `docs/decisions/` are immutable once committed. Change one with a new ADR listing it in `supersedes`, then run `scripts/adr-index.sh`.
+- Gates decide done: an item closes only with `.gates/<ID>.json` evidence (a passing `done_when` test or a captured human Accept) and a `Closes-Item: <ID>` commit trailer.
+- Full rules: `.claude/conventions/continuity-protocol.md`.
+
 ## Repository Structure
 
 - `do-work/` - task queue, plans, and summaries

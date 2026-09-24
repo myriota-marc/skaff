@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "matcher": "startup|resume|clear|compact", "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Write|Edit|MultiEdit", "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-write.sh\"" } ] },
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.sh\"" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Write|Edit|MultiEdit", "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-md.sh\"" } ] },
+      { "matcher": "AskUserQuestion", "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate-capture.sh\"" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate-capture.sh\"" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-check.sh\"" } ] }
+    ]
+  }
+}

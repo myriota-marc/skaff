@@ -1,0 +1,6 @@
+extends: existence
+message: "Avoid '%s'."
+level: error
+ignorecase: true
+tokens:
+  - load-bearing

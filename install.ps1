@@ -26,6 +26,17 @@
   orphaned. Re-installing the same pack (any version) is never a switch
   and never requires this flag.
 
+.PARAMETER NoContinuity
+  Skip the continuity layer (continuity/ in this repo: git and Claude Code
+  hooks, gate scripts, Vale, docs/STATE.md).
+
+.PARAMETER Human
+  Actor id for human gate evidence, e.g. human:jdoe. Default:
+  human:<local part of git config user.email>.
+
+.PARAMETER Purpose
+  One sentence for the docs/STATE.md purpose field.
+
 .EXAMPLE
   .\install.ps1 -NewProjectDir C:\repos\MyService
 
@@ -45,7 +56,13 @@ param(
 
     [switch] $Force,
 
-    [switch] $AllowPackSwitch
+    [switch] $AllowPackSwitch,
+
+    [switch] $NoContinuity,
+
+    [string] $Human = '',
+
+    [string] $Purpose = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -209,6 +226,161 @@ if ((Test-Path $claudeDest) -and -not $Force) {
     $copied += 'CLAUDE.md'
 }
 
+# Continuity layer (continuity/ in this repo, rules in
+# common/.claude/conventions/continuity-protocol.md). Mirrors install.sh:
+# files/ copies skip existing files (-Force overwrites scaffold-owned ones,
+# never docs/ or .gates/), merge/ appends only what is missing, and
+# docs/STATE.md is rendered only when absent. Text is written as UTF-8
+# without BOM and with LF line endings so the sh scripts keep working.
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
+function Write-Lf {
+    param([string] $Path, [string] $Text)
+    [IO.File]::WriteAllText($Path, ($Text -replace "`r`n", "`n"), $utf8NoBom)
+}
+
+function Merge-Lines {
+    param([string] $Src, [string] $Rel, [string] $Mode)
+    $Dest = Join-Path $target $Rel
+    $rel = $Rel
+    if (-not (Test-Path $Dest)) {
+        Write-Lf $Dest ([IO.File]::ReadAllText($Src))
+        $script:copied += $rel
+        return
+    }
+    $existing = @(Get-Content -Path $Dest)
+    $out = New-Object System.Collections.Generic.List[string]
+    $pending = New-Object System.Collections.Generic.List[string]
+    foreach ($line in (Get-Content -Path $Src)) {
+        if ($line -eq '') { continue }
+        if ($line.StartsWith('#')) { $pending.Add($line); continue }
+        if ($Mode -eq 'firstword') {
+            $key = ($line -split ' ')[0]
+            $present = @($existing | Where-Object { $_ -match ('^' + [regex]::Escape($key) + '( |$)') }).Count -gt 0
+        } else {
+            $present = $existing -contains $line
+        }
+        if ($present) { $pending.Clear(); continue }
+        $out.AddRange($pending); $pending.Clear(); $out.Add($line)
+    }
+    if ($out.Count -eq 0) { return }
+    $text = [IO.File]::ReadAllText($Dest)
+    if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) { $text += "`n" }
+    $added = @($out | Where-Object { -not $_.StartsWith('#') }).Count
+    Write-Lf $Dest ($text + "# skaff continuity`n" + (($out -join "`n") + "`n"))
+    $script:copied += "$rel (merged $added line(s))"
+}
+
+function Install-Continuity {
+    $cdir = Join-Path $sourceRoot 'continuity'
+    if (-not (Test-Path $cdir)) { return }
+    $filesRoot = (Resolve-Path (Join-Path $cdir 'files')).Path
+
+    if (-not $script:Human) {
+        $email = (git -C $target config user.email 2>$null)
+        if (-not $email) { $email = (git config user.email 2>$null) }
+        if ($email) { $script:Human = 'human:' + ($email.Trim() -split '@')[0] }
+    }
+
+    $script:indexNew = $false
+    Get-ChildItem -Path $filesRoot -Recurse -File -Force | ForEach-Object {
+        $rel = $_.FullName.Substring($filesRoot.Length).TrimStart('\', '/') -replace '\\', '/'
+        $dest = Join-Path $target $rel
+        $destDir = Split-Path -Parent $dest
+        if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+        if (Test-Path $dest) {
+            $protected = $rel -like 'docs/*' -or $rel -like '.gates/*'
+            if (-not $Force -or $protected) { $script:skipped += $rel; return }
+        }
+        if ($rel -eq 'docs/decisions/index.md') { $script:indexNew = $true }
+        $text = [IO.File]::ReadAllText($_.FullName)
+        if ($rel -eq 'scripts/lib.sh' -and $script:Human) {
+            $text = $text.Replace('@@CONTINUITY_HUMAN@@', $script:Human)
+        }
+        Write-Lf $dest $text
+        if ((Get-Command chmod -ErrorAction SilentlyContinue) -and ($rel -like '*.sh' -or $rel -like '.githooks/*') -and $rel -ne 'scripts/lib.sh') {
+            chmod +x $dest
+        }
+        $script:copied += $rel
+    }
+
+    $adrs = @(Get-ChildItem -Path (Join-Path $target 'docs/decisions') -Filter '[0-9][0-9][0-9][0-9]-*.md' -ErrorAction SilentlyContinue)
+    if ($script:indexNew -and $adrs.Count -gt 0) {
+        if (Get-Command sh -ErrorAction SilentlyContinue) {
+            $env:CLAUDE_PROJECT_DIR = $target
+            sh (Join-Path $target 'scripts/adr-index.sh')
+            Remove-Item Env:\CLAUDE_PROJECT_DIR
+        } else {
+            Write-Warning 'Existing ADRs found: run scripts/adr-index.sh to regenerate docs/decisions/index.md'
+        }
+    }
+
+    Merge-Lines (Join-Path $cdir 'merge/gitignore') '.gitignore' 'exact'
+    Merge-Lines (Join-Path $cdir 'merge/gitattributes') '.gitattributes' 'exact'
+    Merge-Lines (Join-Path $cdir 'merge/tool-versions') '.tool-versions' 'firstword'
+
+    # .claude/settings.json: add each hook group whose command is not already configured.
+    $srcSettings = Join-Path $cdir 'merge/settings.json'
+    $settings = Join-Path $target '.claude/settings.json'
+    if (-not (Test-Path $settings)) {
+        Write-Lf $settings ([IO.File]::ReadAllText($srcSettings))
+        $script:copied += '.claude/settings.json'
+    } else {
+        $dst = [IO.File]::ReadAllText($settings) | ConvertFrom-Json
+        $src = [IO.File]::ReadAllText($srcSettings) | ConvertFrom-Json
+        if (-not $dst.PSObject.Properties['hooks']) {
+            $dst | Add-Member -NotePropertyName hooks -NotePropertyValue ([pscustomobject]@{})
+        }
+        $changed = $false
+        foreach ($evt in $src.hooks.PSObject.Properties) {
+            $have = @()
+            if ($dst.hooks.PSObject.Properties[$evt.Name]) { $have = @($dst.hooks.($evt.Name)) }
+            $cmds = @($have | ForEach-Object { $_.hooks } | ForEach-Object { $_.command })
+            $add = @($evt.Value | Where-Object { @($_.hooks | Where-Object { $cmds -notcontains $_.command }).Count -gt 0 })
+            if ($add.Count -eq 0) { continue }
+            $new = @($have) + $add
+            if ($dst.hooks.PSObject.Properties[$evt.Name]) { $dst.hooks.($evt.Name) = $new }
+            else { $dst.hooks | Add-Member -NotePropertyName $evt.Name -NotePropertyValue $new }
+            $changed = $true
+        }
+        if ($changed) {
+            Write-Lf $settings (($dst | ConvertTo-Json -Depth 20) + "`n")
+            $script:copied += '.claude/settings.json (merged hooks)'
+        }
+    }
+
+    # docs/STATE.md: rendered once, never overwritten.
+    $state = Join-Path $target 'docs/STATE.md'
+    if (Test-Path $state) {
+        $script:skipped += 'docs/STATE.md'
+    } else {
+        $repo = Split-Path -Leaf $target
+        $nowUtc = (Get-Date).ToUniversalTime()
+        $p = $Purpose
+        if (-not $p) { $p = "Replace with one sentence on what $repo is for." }
+        $h = $script:Human
+        if (-not $h) { $h = 'human:unknown' }
+        $text = [IO.File]::ReadAllText((Join-Path $cdir 'templates/STATE.md.template'))
+        $text = $text.Replace('@@REPO@@', $repo).Replace('@@DATE@@', $nowUtc.ToString('yyyy-MM-dd')).
+            Replace('@@STALE_AFTER@@', $nowUtc.AddDays(14).ToString('yyyy-MM-dd')).
+            Replace('@@GENERATED_AT@@', $nowUtc.ToString('yyyy-MM-ddTHH:mm:ssZ')).
+            Replace('@@PACK@@', "$packName@$packVersion").Replace('@@PURPOSE@@', $p.Replace('"', '')).
+            Replace('@@HUMAN@@', $h)
+        $docsDir = Join-Path $target 'docs'
+        if (-not (Test-Path $docsDir)) { New-Item -ItemType Directory -Path $docsDir -Force | Out-Null }
+        Write-Lf $state $text
+        $script:copied += 'docs/STATE.md'
+    }
+
+    if (-not $script:Human) {
+        Write-Warning 'No -Human and no git user.email; set HUMAN in scripts/lib.sh before human gates.'
+    }
+}
+
+if (-not $NoContinuity) {
+    Install-Continuity
+}
+
 # Write pack identity sentinel.
 $packSentinel = Join-Path $target '.claude/.pack'
 $sentinelDir = Split-Path -Parent $packSentinel
@@ -243,3 +415,8 @@ Write-Host "Done. Next steps:"
 Write-Host "  1. cd $target"
 Write-Host "  2. Review CLAUDE.md and .claude/conventions/"
 Write-Host "  3. git add . && git commit -m 'chore: bootstrap claude agent scaffold'"
+if (-not $NoContinuity) {
+    Write-Host "  4. sh scripts/bootstrap.sh   (core.hooksPath, tool pins in .tool-versions, vale sync)"
+    Write-Host "  5. git switch -c chore/continuity; sh scripts/gate.sh A1   (runs scripts/selftest.sh)"
+    Write-Host "  6. set A1 status: done in docs/STATE.md, commit with trailer 'Closes-Item: A1'"
+}

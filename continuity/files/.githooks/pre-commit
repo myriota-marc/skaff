@@ -1,0 +1,39 @@
+#!/bin/sh
+# Versioned pre-commit (core.hooksPath=.githooks, set by scripts/bootstrap.sh).
+CLAUDE_PROJECT_DIR="$(git rev-parse --show-toplevel)"; . "$CLAUDE_PROJECT_DIR/scripts/lib.sh"
+cd "$ROOT"
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+case "$branch" in main|master) block 1 "pre-commit: no commits on $branch. Create a branch: git switch -c <type>/<topic>" ;; esac
+
+# ADRs are immutable: no staged modify, delete or rename of an existing ADR.
+bad="$(git diff --cached --name-status -M | awk -F'\t' '$1!="A" && $2 ~ /^docs\/decisions\/[0-9][0-9][0-9][0-9]-.*\.md$/ {print $1" "$2}')"
+[ -z "$bad" ] || block 1 "pre-commit: ADRs are immutable. Write a new ADR with supersedes instead:" "$bad"
+
+# OKF keys and Vale on staged in-scope Markdown.
+files=''
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+  in_scope "$f" && files="$files $f"
+done
+if [ -n "$files" ]; then
+  out=''
+  for f in $files; do out="$out$(okf_check "$f" "$f")"; done
+  [ -z "$out" ] || block 1 "pre-commit:" "$out"
+  need vale "winget install errata-ai.Vale, brew install vale or asdf"
+  # shellcheck disable=SC2086
+  out="$(vale --output=line $files 2>&1)" || block 1 "pre-commit: Vale errors:" "$out"
+fi
+
+sh scripts/adr-index.sh --check || block 1 "pre-commit: stage the regenerated docs/decisions/index.md"
+
+# Secret scan (merged from Skaff git-workflow). gitleaks when present, regex fallback otherwise.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --no-banner --redact >/dev/null 2>&1 || block 1 "pre-commit: gitleaks found secrets. Run: gitleaks protect --staged --redact -v"
+else
+  echo "pre-commit: gitleaks not installed, using regex fallback (install gitleaks at the version pinned in .tool-versions)" >&2
+  hits="$(git diff --cached -U0 | grep -nE '^\+' | grep -E 'AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{80,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]+|AIza[0-9A-Za-z_\-]{35}|sk-[A-Za-z0-9]{32,}' || true)"
+  [ -z "$hits" ] || block 1 "pre-commit: possible secret in staged diff:" "$hits"
+fi
+blk="$(git diff --cached --name-only --diff-filter=A | grep -E '(^|/)(\.env(\..*)?|id_rsa|.*\.(pfx|p12|pem))$' | grep -v '\.env\.example$' || true)"
+[ -z "$blk" ] || block 1 "pre-commit: blocked file type (confirm with the human first):" "$blk"
+exit 0

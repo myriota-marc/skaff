@@ -1,0 +1,7 @@
+# Vale packages: reproduced by `vale sync` from the pinned URLs in .vale.ini
+.vale/styles/*
+!.vale/styles/Local/
+!.vale/styles/config/
+# Claude Code local state
+.claude/.cache/
+.claude/settings.local.json

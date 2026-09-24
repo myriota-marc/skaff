@@ -1,0 +1,19 @@
+---
+type: Project State
+title: @@REPO@@ state
+description: Resume point for agents and humans. Read first.
+status: stable
+updated: @@DATE@@
+stale_after: @@STALE_AFTER@@T00:00:00Z
+generated: {by: skaff-install, at: @@GENERATED_AT@@}
+verified: []
+purpose: "@@PURPOSE@@"
+state: Skaff installed the @@PACK@@ pack and the continuity layer. The hooks, gates and ADR index await the first self-test.
+open_questions:
+  - {id: Q1, q: "What is the first user-visible outcome for this repo?", owner: "@@HUMAN@@"}
+next_actions:
+  - {id: A1, do: hook self-test passes, done_when: "test: scripts/selftest.sh", status: open, evidence: .gates/A1.json}
+---
+Run `scripts/bootstrap.sh` once per clone. It sets `core.hooksPath`, checks tool pins and syncs Vale.
+
+Close a test item with `scripts/gate.sh <ID>`. Close a human item by answering a `Gate <ID>` question with Accept, or by typing `ACCEPT <ID>`. Then commit with the trailer `Closes-Item: <ID>`.
