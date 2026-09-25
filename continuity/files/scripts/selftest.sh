@@ -91,6 +91,20 @@ row "17 git -C commit, other repo on main" 2 "$(code sh $H/guard-bash.sh <<EOF
 EOF
 )"
 git symbolic-ref HEAD "refs/heads/$br"
+{ # a grown STATE: 27 done items, 3 open ones, a long verified list
+  printf -- '---\ntype: Project State\ntitle: Big state\ndescription: Self-test fixture.\nstatus: stable\n'
+  printf -- 'updated: 2026-01-01\nstale_after: 2999-01-01T00:00:00Z\nverified: [.gates/D1.json, .gates/D2.json, .gates/D3.json]\n'
+  printf -- 'purpose: Exercise the cold start cap.\nstate: Many items are done.\nnext_actions:\n'
+  i=1; while [ "$i" -le 27 ]; do printf '  - {id: D%s, do: finished work, done_when: human, status: done}\n' "$i"; i=$((i + 1)); done
+  for i in 1 2 3; do printf '  - {id: O%s, do: open work, done_when: human, status: open}\n' "$i"; done
+  printf -- '---\n'
+} > docs/STATE.md
+fm "Old doc" "Old." 2000-01-01T00:00:00Z > docs/old.md
+sh $H/session-start.sh > "$tmp/out" 2>&1
+c=ok; [ "$(wc -l < "$tmp/out")" -le 40 ] || c="over 40 lines"
+for want in 'STALE docs/old.md' 'O1 (open)' 'O2 (open)' 'O3 (open)'; do grep -qF "$want" "$tmp/out" || c="missing $want"; done
+row "18 cold start keeps stale docs and open items within 40 lines" ok "$c"
+git checkout -q -- docs/STATE.md && rm -f docs/old.md
 [ "$fail" -eq 0 ] || { echo "last output:"; head -n 20 "$tmp/out"; }
 
 printf 'case | expected | actual\n--- | --- | ---\n%s' "$rows"
